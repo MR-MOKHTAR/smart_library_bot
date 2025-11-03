@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Telegram bot converted from Python to JavaScript",
   "main": "index.js",
+  "type": "commonjs",
   "scripts": {
     "start": "node index.js"
   },

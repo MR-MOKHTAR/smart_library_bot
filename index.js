@@ -2,7 +2,7 @@ const { Telegraf, Markup, session } = require("telegraf");
 const dbManager = require("./db_manager");
 const listBooks = require("./list_books");
 const searchEngine = require("./search_engine");
-import "dotenv/config";
+require("dotenv").config();
 
 // Basic bot configuration
 const TOKEN = process.env.BOT_TOKEN;
