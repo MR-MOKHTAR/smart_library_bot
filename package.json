@@ -1,0 +1,16 @@
+{
+  "name": "telegram-bot-js",
+  "version": "1.0.0",
+  "description": "Telegram bot converted from Python to JavaScript",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "fuzzy-search": "^3.2.1",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7",
+    "telegraf": "^4.16.3"
+  }
+}
