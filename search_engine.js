@@ -103,14 +103,13 @@ async function handleSearchEngine(ctx, { book_id = null } = {}) {
       });
       const bestResult = searcher.search(searchQuery)[0];
 
-      const searchResultText = `
-🔍 <b>نتیجة البحث لـ : ${searchQuery}</b>
-
-📚 <b>اسم الكتاب : </b> ${bestResult.book_name}
-✍️ <b>اسم المؤلف : </b> ${bestResult.author_name}
-📄 <b>عدد الأجزاء : </b> ${bestResult.file_path.split("|").length}
-📊 <b>عدد مرات الطلب : </b> ${bestResult.request_count}
-🆔 <i>${bestResult.id}</i>
+      const searchResultText = ` 
+          🔍 <b>نتیجة البحث لـ : ${searchQuery}</b>
+          📚 <b>اسم الكتاب : </b> ${bestResult.book_name}
+          ✍️ <b>اسم المؤلف : </b> ${bestResult.author_name}
+          📄 <b>عدد الأجزاء : </b> ${bestResult.file_path.split("|").length}
+          📊 <b>عدد مرات الطلب : </b> ${bestResult.request_count}
+          🆔 <i>${bestResult.id}</i>
             `;
 
       if (source === "message") {
@@ -119,8 +118,30 @@ async function handleSearchEngine(ctx, { book_id = null } = {}) {
         await ctx.reply(searchResultText, { parse_mode: "HTML" });
       }
 
-      // Send files logic from list_books.js can be used here
-      // For now, let's just confirm the search result.
+      // Send files
+      if (bestResult.file_path) {
+        const filePaths = bestResult.file_path.split("|");
+        let filesSent = 0;
+        for (const filePath of filePaths) {
+          try {
+            await ctx.replyWithDocument(filePath);
+            filesSent++;
+          } catch (error) {
+            console.error(`Failed to send file: ${filePath}`, error);
+          }
+        }
+        if (filesSent > 0) {
+          await db.run(
+            "UPDATE usol_books SET request_count = request_count + 1, total_requests = total_requests + 1 WHERE id = ?",
+            [bestResult.id]
+          );
+          await ctx.reply(`📥 تم إرسال ${filesSent} ملف.`);
+        } else {
+          await ctx.reply("❌ حدثت مشكلة في إرسال الملفات.");
+        }
+      } else {
+        await ctx.reply("❌ لم يتم العثور على ملف للكتاب.");
+      }
     } else {
       const all_books = await db.all(
         "SELECT id, book_name, author_name FROM usol_books"

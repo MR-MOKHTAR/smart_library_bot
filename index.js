@@ -5,8 +5,7 @@ const searchEngine = require("./search_engine");
 require("dotenv").config();
 
 // Basic bot configuration
-const TOKEN = process.env.BOT_TOKEN;
-const bot = new Telegraf(TOKEN);
+const bot = new Telegraf(process.env.BOT_TOKEN);
 
 // Helper function to escape HTML entities
 function escapeHtml(text) {
