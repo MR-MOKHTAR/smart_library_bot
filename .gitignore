@@ -1,6 +1,11 @@
 node_modules
+node_modules/
 package-lock.json
 py
 question_service.js
 .env
 light_effects.db
+light_effects.db-shm
+light_effects.db-wal
+logs/
+*.log

@@ -1,5 +1,11 @@
 const { Markup } = require("telegraf");
-const { openDb } = require("./db_manager");
+const {
+  openDb,
+  closeDb,
+  incrementBookRequestCount,
+  recordBookAccess,
+} = require("./db_manager");
+const logger = require("./logger");
 
 // Helper function to truncate text
 function truncateText(text, maxLength = 35) {
@@ -62,11 +68,13 @@ async function showCategories(ctx) {
       reply_markup: Markup.inlineKeyboard(keyboard).reply_markup,
       parse_mode: "HTML",
     });
+
+    logger.logInfo("Categories shown", { userId: ctx.from.id });
   } catch (error) {
-    console.error("Error in showCategories:", error);
+    logger.logError("Error in showCategories", error);
     await ctx.reply("An error occurred while fetching categories.");
   } finally {
-    await db.close();
+    await closeDb(db);
   }
 }
 
@@ -81,11 +89,11 @@ async function handleListBooks(ctx, { page = 1, filter_category = null } = {}) {
     const userLanguage = user ? user.selected_language : "All";
 
     let query = `
-            SELECT id, book_name, author_name, 
-                   (LENGTH(file_path) - LENGTH(REPLACE(file_path, '|', '')) + 1) AS parts_count,
-                   zip_file_path
-            FROM usol_books
-        `;
+      SELECT id, book_name, author_name, 
+             (LENGTH(file_path) - LENGTH(REPLACE(file_path, '|', '')) + 1) AS parts_count,
+             zip_file_path
+      FROM usol_books
+    `;
     const params = [];
     const whereClauses = [];
 
@@ -154,11 +162,17 @@ async function handleListBooks(ctx, { page = 1, filter_category = null } = {}) {
         parse_mode: "HTML",
       });
     }
+
+    logger.logInfo("Books list shown", {
+      userId: ctx.from.id,
+      category: filter_category,
+      page,
+    });
   } catch (error) {
-    console.error("Error in handleListBooks:", error);
+    logger.logError("Error in handleListBooks", error);
     await ctx.reply("An error occurred while fetching the book list.");
   } finally {
-    await db.close();
+    await closeDb(db);
   }
 }
 
@@ -169,23 +183,33 @@ async function pdfCallback(ctx) {
   const bookId = match[1];
   const db = await openDb();
   try {
-    const book = await db.get("SELECT file_path FROM usol_books WHERE id = ?", [
+    const book = await db.get("SELECT * FROM usol_books WHERE id = ?", [
       bookId,
     ]);
+
     if (book && book.file_path) {
       const filePaths = book.file_path.split("|");
       let filesSent = 0;
+
       for (const filePath of filePaths) {
         try {
           await ctx.replyWithDocument(filePath);
           filesSent++;
         } catch (error) {
-          console.error(`Failed to send file: ${filePath}`, error);
+          logger.logError("Failed to send file", error, { filePath, bookId });
         }
       }
+
       if (filesSent > 0) {
-        await updateRequestCount(bookId);
+        await incrementBookRequestCount(bookId);
+        await recordBookAccess(ctx.from.id, bookId);
         await ctx.reply(`📥 تم إرسال ${filesSent} ملف.`);
+
+        logger.logInfo("Book sent to user", {
+          userId: ctx.from.id,
+          bookId,
+          filesSent,
+        });
       } else {
         await ctx.reply("❌ حدثت مشكلة في إرسال الملفات.");
       }
@@ -193,10 +217,10 @@ async function pdfCallback(ctx) {
       await ctx.reply("❌ لم يتم العثور على الكتاب.");
     }
   } catch (error) {
-    console.error("Error in pdfCallback:", error);
+    logger.logError("Error in pdfCallback", error, { bookId });
     await ctx.reply("An error occurred while fetching the book.");
   } finally {
-    await db.close();
+    await closeDb(db);
   }
 }
 
@@ -211,35 +235,26 @@ async function zipCallback(ctx) {
       "SELECT zip_file_path FROM usol_books WHERE id = ?",
       [bookId]
     );
+
     if (book && book.zip_file_path) {
       try {
         await ctx.replyWithDocument(book.zip_file_path);
+        logger.logInfo("Zip file sent to user", {
+          userId: ctx.from.id,
+          bookId,
+        });
       } catch (error) {
-        console.error(`Failed to send zip file for book ${bookId}`, error);
+        logger.logError("Failed to send zip file", error, { bookId });
         await ctx.reply("❌ حدثت مشکله في ارسال الملف المضغوط.");
       }
     } else {
       await ctx.reply("عذرًا، لم نتمكن من العثور على الملف المضغوط 📁❌.");
     }
   } catch (error) {
-    console.error("Error in zipCallback:", error);
+    logger.logError("Error in zipCallback", error, { bookId });
     await ctx.reply("An error occurred while fetching the zip file.");
   } finally {
-    await db.close();
-  }
-}
-
-async function updateRequestCount(bookId) {
-  const db = await openDb();
-  try {
-    await db.run(
-      "UPDATE usol_books SET request_count = request_count + 1, total_requests = total_requests + 1 WHERE id = ?",
-      [bookId]
-    );
-  } catch (error) {
-    console.error(`Failed to update request count for book ${bookId}`, error);
-  } finally {
-    await db.close();
+    await closeDb(db);
   }
 }
 
